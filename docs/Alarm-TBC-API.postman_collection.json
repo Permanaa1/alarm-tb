@@ -1,0 +1,319 @@
+{
+  "info": {
+    "name": "Alarm TBC API v1",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:8000/api/v1"
+    },
+    {
+      "key": "kode",
+      "value": "ISI-KODE"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "jadwal_id",
+      "value": "1"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Aktivasi",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/aktivasi",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "aktivasi"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"kode\": \"{{kode}}\",\n  \"nama_perangkat\": \"Uji Postman\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 200) { pm.collectionVariables.set('token', pm.response.json().token); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Aktivasi ulang (harus 422)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/aktivasi",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "aktivasi"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"kode\": \"{{kode}}\",\n  \"nama_perangkat\": \"Uji Postman\"\n}"
+        }
+      }
+    },
+    {
+      "name": "3. Profil",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/profil",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "profil"
+          ]
+        }
+      }
+    },
+    {
+      "name": "4. Consent",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/consent",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "consent"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"setuju\": true\n}"
+        }
+      }
+    },
+    {
+      "name": "5. Jadwal",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/jadwal",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "jadwal"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const j = pm.response.json().jadwal; if (j && j.length) { pm.collectionVariables.set('jadwal_id', String(j[0].id)); }"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Sinkron log minum",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/log-minum/sinkron",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "log-minum",
+            "sinkron"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"items\": [\n    {\n      \"client_uuid\": \"3f1c2b7e-5d4a-4c1b-9a7e-0b6f2d8e1a11\",\n      \"jadwal_id\": \"{{jadwal_id}}\",\n      \"status\": \"diminum\",\n      \"waktu_konfirmasi\": \"2026-10-26T07:05:00+07:00\"\n    },\n    {\n      \"client_uuid\": \"9a8b7c6d-1e2f-4a3b-8c4d-5e6f7a8b9c0d\",\n      \"jadwal_id\": 999999,\n      \"status\": \"diminum\",\n      \"waktu_konfirmasi\": \"2026-10-26T07:06:00+07:00\"\n    }\n  ]\n}"
+        }
+      }
+    },
+    {
+      "name": "7. Sinkron ulang (harus sudah_ada)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/log-minum/sinkron",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "log-minum",
+            "sinkron"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"items\": [\n    {\n      \"client_uuid\": \"3f1c2b7e-5d4a-4c1b-9a7e-0b6f2d8e1a11\",\n      \"jadwal_id\": \"{{jadwal_id}}\",\n      \"status\": \"diminum\",\n      \"waktu_konfirmasi\": \"2026-10-26T07:05:00+07:00\"\n    },\n    {\n      \"client_uuid\": \"9a8b7c6d-1e2f-4a3b-8c4d-5e6f7a8b9c0d\",\n      \"jadwal_id\": 999999,\n      \"status\": \"diminum\",\n      \"waktu_konfirmasi\": \"2026-10-26T07:06:00+07:00\"\n    }\n  ]\n}"
+        }
+      }
+    },
+    {
+      "name": "8. Profil tanpa token (harus 401 JSON)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/profil",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "profil"
+          ]
+        }
+      }
+    },
+    {
+      "name": "9. Perangkat (FCM)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/perangkat",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "perangkat"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"fcm_token\": \"token-fcm-uji\",\n  \"nama_perangkat\": \"Uji Postman\"\n}"
+        }
+      }
+    }
+  ]
+}

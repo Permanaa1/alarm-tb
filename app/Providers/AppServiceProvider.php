@@ -5,6 +5,9 @@ namespace App\Providers;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Database\Connection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -27,5 +30,8 @@ class AppServiceProvider extends ServiceProvider
                 throw new \RuntimeException('Koneksi SIMRS hanya boleh membaca (SELECT).');
             }
         });
+
+    RateLimiter::for('aktivasi', fn (Request $request) => Limit::perMinute(10)->by($request->ip()));
+    RateLimiter::for('api-pasien', fn (Request $request) => Limit::perMinute(60)->by($request->user()?->getAuthIdentifier() ?: $request->ip()));
     }
 }
