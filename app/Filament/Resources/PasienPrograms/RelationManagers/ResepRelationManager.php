@@ -9,9 +9,11 @@ use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\TimePicker;
 use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
@@ -46,6 +48,20 @@ class ResepRelationManager extends RelationManager
                 ])
                 ->required(),
 
+            Repeater::make('jam_minum')
+                ->label('Jam minum')
+                ->helperText('Satu baris untuk setiap kali minum dalam sehari, sesuai anjuran dokter (misalnya 07:00 dan 19:00 untuk 2 kali sehari).')
+                ->simple(
+                    TimePicker::make('jam')
+                        ->seconds(false)
+                        ->required()
+                )
+                ->defaultItems(1)
+                ->minItems(1)
+                ->maxItems(6)
+                ->addActionLabel('Tambah jam minum')
+                ->columnSpanFull(),
+
             DatePicker::make('tgl_mulai')
                 ->label('Tanggal mulai')
                 ->required(),
@@ -69,6 +85,11 @@ class ResepRelationManager extends RelationManager
             ->columns([
                 TextColumn::make('nama_obat')->label('Obat')->searchable(),
                 TextColumn::make('dosis_teks')->label('Dosis'),
+                TextColumn::make('jam_minum')
+                    ->label('Jam minum')
+                    ->badge()
+                    ->formatStateUsing(fn ($state) => substr((string) $state, 0, 5))
+                    ->placeholder('Ikut jam pasien'),
                 TextColumn::make('fase')->badge(),
                 TextColumn::make('tgl_mulai')->label('Mulai')->date('d M Y'),
                 TextColumn::make('tgl_selesai')->label('Selesai')->date('d M Y')->placeholder('Belum diisi'),

@@ -4,9 +4,12 @@ namespace App\Filament\Widgets;
 
 use App\Models\LogMinum;
 use App\Models\PasienProgram;
+use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
+use Illuminate\Database\Eloquent\Builder;
 
 class PasienBermasalahWidget extends BaseWidget
 {
@@ -16,7 +19,7 @@ class PasienBermasalahWidget extends BaseWidget
 
     public function table(Table $table): Table
     {
-        // Dosis dianggap "belum terkonfirmasi" bila sudah lewat 2 jam dari jadwal
+        // Dosis dianggap "belum terkonfirmasi" bila jadwalnya sudah lewat 2 jam
         $batas = now()->subHours(2);
 
         $belumTerkonfirmasi = function ($q) use ($batas) {
@@ -32,12 +35,15 @@ class PasienBermasalahWidget extends BaseWidget
                 ->whereDoesntHave('logMinum', fn ($l) => $l->where('status', 'diminum'));
         };
 
+        $hpTerhubung = fn ($q) => $q->whereNull('dicabut_pada');
+
         return $table
             ->query(
                 PasienProgram::query()
                     ->where('status', 'aktif')
                     ->whereHas('jadwal', $belumTerkonfirmasi)
                     ->withCount(['jadwal as belum_terkonfirmasi' => $belumTerkonfirmasi])
+                    ->withExists(['deviceTokens as hp_terhubung' => $hpTerhubung])
                     ->addSelect([
                         'terakhir_minum' => LogMinum::query()
                             ->select('log_minum.waktu_konfirmasi')
@@ -50,6 +56,7 @@ class PasienBermasalahWidget extends BaseWidget
                     ->with('pmo')
                     ->orderByDesc('belum_terkonfirmasi')
             )
+            ->description('Angka = jumlah jadwal minum yang sudah lewat lebih dari 2 jam tanpa catatan "sudah minum". Bisa berarti pasien belum minum, HP belum sempat mengirim data, atau aplikasi belum diaktifkan (lihat kolom "HP terhubung").')
             ->columns([
                 TextColumn::make('nama')->label('Pasien')->searchable(),
                 TextColumn::make('no_rm')->label('No. RM'),
@@ -57,6 +64,9 @@ class PasienBermasalahWidget extends BaseWidget
                     ->label('Dosis belum terkonfirmasi')
                     ->badge()
                     ->color(fn ($state): string => $state >= 3 ? 'danger' : 'warning'),
+                IconColumn::make('hp_terhubung')
+                    ->label('HP terhubung')
+                    ->boolean(),
                 TextColumn::make('terakhir_minum')
                     ->label('Terakhir konfirmasi minum')
                     ->dateTime('d M H:i')
@@ -65,8 +75,17 @@ class PasienBermasalahWidget extends BaseWidget
                 TextColumn::make('pmo.nama')->label('PMO')->placeholder('Belum ada'),
                 TextColumn::make('pmo.no_hp')->label('HP PMO')->copyable(),
             ])
-            ->paginated([10])
+            ->filters([
+                TernaryFilter::make('hp_terhubung')
+                    ->label('HP terhubung')
+                    ->queries(
+                        true: fn (Builder $query) => $query->whereHas('deviceTokens', $hpTerhubung),
+                        false: fn (Builder $query) => $query->whereDoesntHave('deviceTokens', $hpTerhubung),
+                        blank: fn (Builder $query) => $query,
+                    ),
+            ])
             ->poll('30s')
+            ->paginated([10])
             ->emptyStateHeading('Tidak ada pasien yang perlu ditindaklanjuti');
     }
 }

@@ -21,7 +21,7 @@ class PasienController extends Controller
                 $q->whereNull('tgl_selesai')->orWhere('tgl_selesai', '>=', now()->toDateString());
             })
             ->orderBy('tgl_mulai')
-            ->get(['nama_obat', 'dosis_teks', 'fase', 'tgl_mulai', 'tgl_selesai']);
+            ->get(['nama_obat', 'dosis_teks', 'fase', 'jam_minum', 'tgl_mulai', 'tgl_selesai']);
 
         return [
             'nama' => $pasien->nama,
