@@ -3,7 +3,7 @@
 namespace App\Filament\Resources\PasienPrograms\Pages;
 
 use App\Filament\Resources\PasienPrograms\PasienProgramResource;
-use Filament\Actions\DeleteAction;
+use Filament\Actions\ViewAction;
 use Filament\Resources\Pages\EditRecord;
 
 class EditPasienProgram extends EditRecord
@@ -12,8 +12,14 @@ class EditPasienProgram extends EditRecord
 
     protected function getHeaderActions(): array
     {
+        // Sengaja tanpa tombol hapus. Gunakan status selesai/putus obat/pindah.
         return [
-            DeleteAction::make(),
+            ViewAction::make(),
         ];
+    }
+
+    protected function getRedirectUrl(): string
+    {
+        return static::getResource()::getUrl('view', ['record' => $this->record]);
     }
 }

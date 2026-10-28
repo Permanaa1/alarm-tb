@@ -2,30 +2,42 @@
 
 namespace App\Filament\Resources\PasienPrograms\Tables;
 
-use App\Models\PasienProgram;
-use App\Services\ActivationCodeService;
-use App\Services\AuditLogger;
-use Filament\Actions\Action;
+use App\Filament\Resources\PasienPrograms\Actions\AksiPasien;
+use App\Filament\Resources\PasienPrograms\PasienProgramResource;
+use App\Services\RekapKepatuhan;
+use Carbon\Carbon;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\EditAction;
-use Filament\Notifications\Notification;
+use Filament\Actions\ViewAction;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Filters\TernaryFilter;
 use Filament\Tables\Table;
-use App\Services\ScheduleGenerator;
+use Illuminate\Database\Eloquent\Builder;
 
 class PasienProgramsTable
 {
     public static function configure(Table $table): Table
     {
+        $hpTerhubung = fn ($q) => $q->whereNull('dicabut_pada');
+
         return $table
+            ->modifyQueryUsing(fn (Builder $query) => $query
+                ->with('pmo')
+                ->withCount([
+                    'jadwal as jt_7' => fn ($q) => $q->minum()->jatuhTempo()->sejak(7),
+                    'jadwal as belum_7' => fn ($q) => $q->minum()->jatuhTempo()->sejak(7)->belumDiminum(),
+                ])
+                ->withExists(['deviceTokens as hp_terhubung' => $hpTerhubung])
+                ->withMin('resep as mulai_resep', 'tgl_mulai')
+                ->withMax('resep as selesai_resep', 'tgl_selesai'))
             ->columns([
-                TextColumn::make('no_rm')->label('No. RM')->searchable()->sortable(),
-                TextColumn::make('nama')->label('Nama')->searchable()->sortable(),
-                TextColumn::make('pmo.nama')->label('PMO')->placeholder('Belum ada'),
-                TextColumn::make('jam_minum_default')
-                    ->label('Jam minum')
-                    ->formatStateUsing(fn ($state) => substr((string) $state, 0, 5)),
+                TextColumn::make('nama')
+                    ->label('Pasien')
+                    ->searchable()
+                    ->sortable()
+                    ->description(fn ($record) => 'RM ' . $record->no_rm),
                 TextColumn::make('status')
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
@@ -34,7 +46,48 @@ class PasienProgramsTable
                         'selesai' => 'gray',
                         default => 'warning',
                     }),
-                IconColumn::make('foto_bukti_aktif')->label('Foto bukti')->boolean(),
+                TextColumn::make('mulai_resep')
+                    ->label('Pengobatan')
+                    ->state(fn ($record) => $record->mulai_resep && $record->selesai_resep
+                        ? Carbon::parse($record->mulai_resep)->format('d M Y') . ' – ' . Carbon::parse($record->selesai_resep)->format('d M Y')
+                        : 'Belum ada resep')
+                    ->description(function ($record) {
+                        if (! $record->mulai_resep || ! $record->selesai_resep) {
+                            return null;
+                        }
+
+                        $t = RekapKepatuhan::hitungTahap(
+                            Carbon::parse($record->mulai_resep),
+                            Carbon::parse($record->selesai_resep)
+                        );
+
+                        return $t['tahap'] === 'Sedang berjalan'
+                            ? "Hari ke-{$t['hari_ke']} dari {$t['total_hari']}"
+                            : $t['tahap'];
+                    }),
+                TextColumn::make('kepatuhan')
+                    ->label('Kepatuhan 7 hari')
+                    ->state(fn ($record) => RekapKepatuhan::label(
+                        $record->jt_7 - $record->belum_7,
+                        $record->jt_7,
+                        (bool) $record->hp_terhubung
+                    )[0])
+                    ->badge()
+                    ->color(fn ($record): string => RekapKepatuhan::label(
+                        $record->jt_7 - $record->belum_7,
+                        $record->jt_7,
+                        (bool) $record->hp_terhubung
+                    )[1])
+                    ->description(fn ($record) => $record->hp_terhubung
+                        ? RekapKepatuhan::teksDosis($record->jt_7 - $record->belum_7, $record->jt_7)
+                        : null),
+                IconColumn::make('hp_terhubung')
+                    ->label('Aplikasi aktif')
+                    ->boolean(),
+                TextColumn::make('pmo.nama')
+                    ->label('PMO')
+                    ->placeholder('Belum ada')
+                    ->toggleable(),
                 TextColumn::make('created_at')
                     ->label('Didaftarkan')
                     ->dateTime('d M Y H:i')
@@ -48,55 +101,31 @@ class PasienProgramsTable
                     'putus_obat' => 'Putus obat',
                     'pindah' => 'Pindah',
                 ]),
+                TernaryFilter::make('hp_terhubung')
+                    ->label('Aplikasi aktif')
+                    ->queries(
+                        true: fn (Builder $query) => $query->whereHas('deviceTokens', $hpTerhubung),
+                        false: fn (Builder $query) => $query->whereDoesntHave('deviceTokens', $hpTerhubung),
+                        blank: fn (Builder $query) => $query,
+                    ),
             ])
+            ->recordUrl(fn ($record) => PasienProgramResource::getUrl('view', ['record' => $record]))
             ->recordActions([
-                Action::make('buatKode')
-                    ->label('Buat kode aktivasi')
-                    ->icon('heroicon-o-key')
-                    ->color('warning')
-                    ->visible(fn (): bool => in_array(auth()->user()?->role, ['admin', 'tb_dots'], true))
-                    ->requiresConfirmation()
-                    ->modalHeading('Buat kode aktivasi baru?')
-                    ->modalDescription('Kode lama yang belum dipakai akan dibatalkan. Kode hanya ditampilkan sekali, jadi tuliskan di kartu pasien.')
-                    ->modalSubmitActionLabel('Buat kode')
-                    ->action(function (PasienProgram $record) {
-                        $kode = app(ActivationCodeService::class)->buat($record, auth()->id());
-
-                        AuditLogger::catat('buat_kode', $record);
-
-                        Notification::make()
-                            ->title('Kode aktivasi untuk ' . $record->nama)
-                            ->body(ActivationCodeService::format($kode) . ' (berlaku ' . ActivationCodeService::MASA_BERLAKU_JAM . ' jam, sekali pakai)')
-                            ->success()
-                            ->persistent()
-                            ->send();
-                    }),
-                Action::make('buatJadwal')
-                ->label('Buat/perbarui jadwal')
-                ->icon('heroicon-o-calendar-days')
-                ->visible(fn (): bool => in_array(auth()->user()?->role, ['admin', 'tb_dots', 'farmasi'], true))
-                ->requiresConfirmation()
-                ->modalHeading('Buat atau perbarui jadwal minum?')
-                ->modalDescription('Jadwal minum dari hari ini sampai tanggal selesai resep akan dibuat ulang. Jadwal yang sudah punya catatan konfirmasi tidak dihapus.')
-                ->action(function (PasienProgram $record) {
-                    $hasil = app(ScheduleGenerator::class)->generate($record);
-
-                    AuditLogger::catat('buat_jadwal', $record, json_encode($hasil));
-
-                    $notif = Notification::make()
-                        ->title('Jadwal untuk ' . $record->nama)
-                        ->body(
-                            "Dibuat: {$hasil['dibuat']}, diganti: {$hasil['dihapus']}"
-                            . ($hasil['dilewati'] ? ", resep dilewati: {$hasil['dilewati']} (tanggal selesai kosong atau tidak wajar)" : '')
-                        );
-
-                    ($hasil['dibuat'] === 0 || $hasil['dilewati'] > 0) ? $notif->warning() : $notif->success();
-
-                    $notif->send();
-                }),
-                EditAction::make(),
+                ViewAction::make()->label('Detail'),
+                ActionGroup::make([
+                    EditAction::make()->label('Ubah data'),
+                    AksiPasien::buatKode(),
+                    AksiPasien::buatJadwal(),
+                ])
+                    ->label('Aksi')
+                    ->icon('heroicon-m-chevron-down')
+                    ->color('gray')
+                    ->button(),
             ])
             ->toolbarActions([])
-            ->defaultSort('created_at', 'desc');
+            ->striped()
+            ->defaultSort('created_at', 'desc')
+            ->emptyStateHeading('Belum ada pasien terdaftar')
+            ->emptyStateDescription('Klik "Daftarkan pasien" untuk menambahkan pasien dari SIMRS.');
     }
 }

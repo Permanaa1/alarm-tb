@@ -5,8 +5,6 @@ namespace App\Filament\Resources\PasienPrograms\Schemas;
 use App\Services\Simrs\SimrsRepository;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\TimePicker;
-use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
@@ -17,6 +15,7 @@ class PasienProgramForm
     {
         return $schema->components([
             Section::make('Data pasien (dari SIMRS)')
+                ->description('Cari pasien dari SIMRS. Nama dan nomor HP terisi otomatis.')
                 ->schema([
                     Select::make('no_rm')
                         ->label('Cari pasien (no. RM atau nama)')
@@ -62,7 +61,8 @@ class PasienProgramForm
                 ])
                 ->columns(2),
 
-            Section::make('Pengaturan program')
+            Section::make('Pendamping dan status')
+                ->description('Jam minum obat diatur pada resep (tab Resep obat di halaman detail pasien).')
                 ->schema([
                     Select::make('pmo_id')
                         ->label('PMO (pendamping)')
@@ -75,12 +75,6 @@ class PasienProgramForm
                             TextInput::make('hubungan')->placeholder('anak, istri, dll'),
                         ]),
 
-                    TimePicker::make('jam_minum_default')
-                        ->label('Jam minum obat')
-                        ->seconds(false)
-                        ->default('07:00')
-                        ->required(),
-
                     Select::make('status')
                         ->options([
                             'aktif' => 'Aktif',
@@ -90,10 +84,6 @@ class PasienProgramForm
                         ])
                         ->default('aktif')
                         ->required(),
-
-                    Toggle::make('foto_bukti_aktif')
-                        ->label('Wajib foto bukti minum')
-                        ->helperText('Mati secara default untuk menghemat kuota pasien.'),
                 ])
                 ->columns(2),
         ]);
