@@ -11,6 +11,7 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['auth:sanctum', 'pasien', 'throttle:api-pasien'])->group(function () {
         Route::get('profil', [PasienController::class, 'profil']);
         Route::get('jadwal', [PasienController::class, 'jadwal']);
+        Route::get('riwayat', [PasienController::class, 'riwayat']);
         Route::post('consent', [PasienController::class, 'consent']);
         Route::put('perangkat', [PasienController::class, 'perangkat']);
         Route::post('log-minum/sinkron', [LogMinumController::class, 'sinkron']);

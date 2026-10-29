@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\DeviceToken;
 use App\Models\PasienProgram;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -59,24 +60,30 @@ class PasienController extends Controller
                 ->update(['terakhir_aktif' => now()]);
         }
 
-        $jadwal = $pasien->jadwal()
-            ->whereBetween('tanggal', [$dari->toDateString(), $sampai->toDateString()])
-            ->with(['logMinum' => fn ($q) => $q->select('id', 'jadwal_id', 'status')->latest('id')])
-            ->orderBy('tanggal')
-            ->orderBy('jam')
-            ->get();
+        return response()->json([
+            'dihasilkan_pada' => now()->toIso8601String(),
+            'zona_waktu' => config('app.timezone'),
+            'jadwal' => $this->daftarJadwal($pasien, $dari, $sampai),
+        ]);
+    }
+
+    /**
+     * Riwayat: jadwal dari N hari lalu sampai hari ini, lengkap dengan statusnya.
+     * Dipakai aplikasi untuk mengisi riwayat di HP (termasuk setelah ganti HP atau pasang ulang).
+     */
+    public function riwayat(Request $request): JsonResponse
+    {
+        /** @var PasienProgram $pasien */
+        $pasien = $request->user();
+
+        $hari = min(max((int) $request->query('hari', 60), 1), 180);
+        $sampai = now()->startOfDay();
+        $dari = $sampai->copy()->subDays($hari);
 
         return response()->json([
             'dihasilkan_pada' => now()->toIso8601String(),
             'zona_waktu' => config('app.timezone'),
-            'jadwal' => $jadwal->map(fn ($j) => [
-                'id' => $j->id,
-                'jenis' => $j->jenis,
-                'tanggal' => $j->tanggal->toDateString(),
-                'jam' => substr((string) $j->jam, 0, 5),
-                'keterangan' => $j->keterangan,
-                'status' => $j->logMinum->first()?->status,
-            ])->values(),
+            'jadwal' => $this->daftarJadwal($pasien, $dari, $sampai),
         ]);
     }
 
@@ -110,6 +117,27 @@ class PasienController extends Controller
             ], fn ($v) => $v !== null));
 
         return response()->json(['pesan' => 'Perangkat diperbarui.']);
+    }
+
+    /** Daftar jadwal pasien antara dua tanggal (inklusif) beserta status terakhirnya. */
+    private function daftarJadwal(PasienProgram $pasien, Carbon $dari, Carbon $sampai): array
+    {
+        return $pasien->jadwal()
+            ->whereBetween('tanggal', [$dari->toDateString(), $sampai->toDateString()])
+            ->with(['logMinum' => fn ($q) => $q->select('id', 'jadwal_id', 'status')->latest('id')])
+            ->orderBy('tanggal')
+            ->orderBy('jam')
+            ->get()
+            ->map(fn ($j) => [
+                'id' => $j->id,
+                'jenis' => $j->jenis,
+                'tanggal' => $j->tanggal->toDateString(),
+                'jam' => substr((string) $j->jam, 0, 5),
+                'keterangan' => $j->keterangan,
+                'status' => $j->logMinum->first()?->status,
+            ])
+            ->values()
+            ->all();
     }
 
     /** ID perangkat diambil dari nama token ("perangkat:12"). */
