@@ -34,7 +34,7 @@ Putus obat adalah masalah utama dalam pengobatan TBC. Sistem ini membantu pasien
 Kondisi yang menjadi dasar rancangan:
 
 - Pengguna umumnya orang tua atau pendamping pasien, dengan kuota data terbatas.
-- Data pasien dan resep dibaca dari **SIMRS rumah sakit secara read-only**. Semua data baru disimpan di database sendiri.
+- Data pasien dan resep **berdiri sendiri**: diinput manual oleh petugas dan disimpan di database sendiri. Sistem ini tidak terhubung ke database SIMRS sama sekali (permintaan pihak rumah sakit).
 - Login memakai **kode aktivasi dari petugas**, bukan OTP berbayar.
 - Aplikasi **tidak menghitung dosis**. Dosis hanya teks yang disalin petugas dari resep dokter.
 
@@ -42,9 +42,9 @@ Kondisi yang menjadi dasar rancangan:
 
 **Sudah tersedia (dashboard petugas)**
 
-- Pencarian pasien dari SIMRS (no. RM atau nama), hanya pasien dengan diagnosis TBC.
+- Pendaftaran pasien dengan input manual (no. RM, nama, tempat dan tanggal lahir, jenis kelamin, no. HP, alamat) dan pencarian pasien berdasarkan nama atau no. RM.
 - Pendaftaran pasien ke program, termasuk data PMO (Pengawas Menelan Obat).
-- Pengelolaan resep obat (dosis berupa teks dari dokter) dan tampilan resep SIMRS sebagai acuan.
+- Pengelolaan resep obat (dosis berupa teks yang disalin dari resep dokter).
 - Pembuatan jadwal minum harian otomatis dari tanggal mulai sampai tanggal selesai resep.
 - Pembuatan **kode aktivasi** sekali pakai (berlaku 48 jam) untuk menghubungkan HP pasien.
 - Widget pemantauan: pasien dengan dosis yang belum terkonfirmasi dalam 7 hari terakhir.
@@ -66,19 +66,17 @@ Kondisi yang menjadi dasar rancangan:
  │ Antrean konfirmasi lokal  │   Sanctum    │ Dashboard /admin     │
  └───────────────────────────┘   token      │ (Filament, petugas)  │
                                             │ Scheduler + Queue    │
-                                            └───────┬───────┬──────┘
-                                                    │       │ SELECT saja
-                                                    ▼       ▼
-                                             DB sendiri   DB SIMRS (read-only)
-                                             alarm_tbc    pasien, diagnosis, resep
+                                            └──────────┬───────────┘
+                                                       ▼
+                                                  DB sendiri
+                                                  alarm_tbc
 ```
 
 Keputusan penting:
 
 - Alarm dijadwalkan **lokal di HP**, sehingga tetap berbunyi tanpa kuota atau sinyal.
-- Dua koneksi database: koneksi default (baca dan tulis) dan koneksi `simrs` (hanya baca).
-- Akses SIMRS lewat satu kelas repository dan pemetaan di `config/simrs.php`. Bila skema SIMRS asli berbeda, cukup ubah config.
-- Tidak ada foreign key lintas database. Penghubung kedua database adalah `no_rm`.
+- Satu database milik sendiri. Tidak ada koneksi ke SIMRS, bahkan untuk membaca.
+- `no_rm` hanyalah data identitas yang diketik petugas (unik di dalam sistem ini), bukan penghubung ke sistem lain.
 
 ## Teknologi
 
@@ -127,36 +125,23 @@ cp .env.example .env        # Windows (cmd): copy .env.example .env
 php artisan key:generate
 ```
 
-**4. Buat dua database**
+**4. Buat database**
 
 ```sql
 CREATE DATABASE alarm_tbc CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-CREATE DATABASE simrs_dummy CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ```
 
 **5. Isi `.env`**
 
-Sesuaikan kredensial database, dan pastikan blok SIMRS ada (lihat [Konfigurasi](#konfigurasi)). Pastikan juga `APP_TIMEZONE=Asia/Jakarta`.
+Sesuaikan kredensial database. Pastikan juga `APP_TIMEZONE=Asia/Jakarta`.
 
-**6. Isi database SIMRS tiruan** (data fiktif untuk pengembangan)
-
-```bash
-mysql -u root -p simrs_dummy < database/simrs_dummy.sql
-```
-
-Catatan: di PowerShell operator `<` tidak berfungsi. Gunakan `cmd`, Git Bash, atau:
-
-```powershell
-Get-Content database/simrs_dummy.sql | mysql -u root -p simrs_dummy
-```
-
-**7. Jalankan migrasi** (hanya ke database `alarm_tbc`)
+**6. Jalankan migrasi**
 
 ```bash
 php artisan migrate
 ```
 
-**8. Buat akun admin**
+**7. Buat akun admin**
 
 ```bash
 php artisan make:filament-user
@@ -164,7 +149,7 @@ php artisan tinker
 >>> App\Models\User::where('email', 'emailmu@contoh.com')->update(['role' => 'admin']);
 ```
 
-**9. Jalankan**
+**8. Jalankan**
 
 ```bash
 php artisan serve
@@ -172,16 +157,13 @@ php artisan serve
 
 Dashboard: <http://127.0.0.1:8000/admin>
 
-**10. Cek cepat**
+**9. Cek cepat**
 
 ```bash
 php artisan migrate:status
 php artisan tinker
 >>> DB::connection()->select('select 1');
->>> DB::connection('simrs')->select('select 1');
 ```
-
-Data contoh di SIMRS tiruan: `000101` Sutrisno (TBC), `000102` Siti Aminah (TBC), `000103` pasien bukan TBC (tidak akan muncul di pencarian).
 
 ## Konfigurasi
 
@@ -191,35 +173,12 @@ Data contoh di SIMRS tiruan: `000101` Sutrisno (TBC), `000102` Siti Aminah (TBC)
 |---|---|
 | `APP_TIMEZONE` | Wajib `Asia/Jakarta`. Jadwal alarm bergantung pada zona waktu |
 | `DB_*` | Database milik sistem (`alarm_tbc`) |
-| `SIMRS_DB_DRIVER` | `mysql`, atau `pgsql` / `sqlsrv` bila SIMRS memakai database lain |
-| `SIMRS_DB_HOST`, `SIMRS_DB_PORT` | Alamat database SIMRS |
-| `SIMRS_DB_DATABASE` | Nama database SIMRS (saat pengembangan: `simrs_dummy`) |
-| `SIMRS_DB_USERNAME`, `SIMRS_DB_PASSWORD` | Akun database SIMRS. **Untuk produksi harus akun yang hanya punya izin `SELECT`** |
 
-Contoh blok yang harus ada di `.env.example`:
+Contoh blok di `.env`:
 
 ```env
 APP_TIMEZONE=Asia/Jakarta
-
-SIMRS_DB_DRIVER=mysql
-SIMRS_DB_HOST=127.0.0.1
-SIMRS_DB_PORT=3306
-SIMRS_DB_DATABASE=simrs_dummy
-SIMRS_DB_USERNAME=root
-SIMRS_DB_PASSWORD=
 ```
-
-### Menghubungkan ke SIMRS asli
-
-1. Minta ke IT rumah sakit: jenis database, cara akses, dan **akun dengan izin `SELECT` saja**.
-2. Sesuaikan nama tabel dan kolom di `config/simrs.php` (pasien, diagnosis, resep).
-3. Pastikan awalan kode ICD-10 TBC (`tbc_icd_prefix`) dan cara menandai pasien TBC sesuai kondisi di SIMRS. Nilai bawaan (A15 sampai A19) adalah asumsi.
-4. Ganti `SIMRS_DB_*` di `.env`, lalu `php artisan optimize:clear`.
-5. Uji pencarian pasien di dashboard.
-
-Lapisan SIMRS menolak semua query selain `SELECT`, `SHOW`, `DESCRIBE`, dan `EXPLAIN` di sisi kode. Ini pagar tambahan, bukan pengganti akun database yang hanya-baca.
-
-**Aturan penting:** jangan pernah membuat migrasi yang menyentuh koneksi `simrs` (`Schema::connection('simrs')`). Tabel tiruan SIMRS dibuat lewat SQL manual.
 
 ## Peran pengguna
 
@@ -233,7 +192,7 @@ Akun dengan `is_active = false` tidak dapat masuk dashboard.
 
 ## Alur kerja petugas
 
-1. **Daftarkan pasien:** menu *Pasien Program*, cari pasien dari SIMRS, lengkapi PMO, jam minum, dan status.
+1. **Daftarkan pasien:** menu *Pasien Program*, klik *Daftarkan pasien*, isi data pasien secara manual (no. RM, nama, tanggal lahir, dll), lalu lengkapi PMO dan status.
 2. **Isi resep:** buka pasien, tab *Resep obat*. Salin teks dosis persis dari resep dokter, tentukan fase, tanggal mulai, dan **tanggal selesai** (wajib, ditentukan bersama dokter atau petugas TB).
 3. **Buat jadwal:** tekan *Buat/perbarui jadwal*. Tombol ini aman ditekan berulang. Jadwal mendatang diganti sesuai resep dan jam minum terbaru, sedangkan jadwal yang sudah punya catatan konfirmasi tidak dihapus.
 4. **Buat kode aktivasi:** tekan *Buat kode aktivasi*. Kode (format `XXXX-XXXX`) hanya ditampilkan sekali dan berlaku 48 jam. Tuliskan di kartu pasien.
@@ -254,17 +213,13 @@ app/
 │   │   └── Tables/PasienProgramsTable.php
 │   └── Widgets/PasienBermasalahWidget.php
 ├── Models/                  # Pmo, PasienProgram, Resep, Jadwal, LogMinum, ...
-├── Providers/AppServiceProvider.php   # pagar read-only SIMRS
+├── Providers/AppServiceProvider.php   # pembatas laju API
 └── Services/
     ├── ActivationCodeService.php
     ├── AuditLogger.php
-    ├── ScheduleGenerator.php
-    └── Simrs/SimrsRepository.php
-config/
-└── simrs.php                # pemetaan tabel/kolom SIMRS
+    └── ScheduleGenerator.php
 database/
-├── migrations/
-└── simrs_dummy.sql          # data tiruan SIMRS (fiktif)
+└── migrations/
 docs/                        # dokumen rancangan dan rangkuman
 ```
 
@@ -274,7 +229,7 @@ docs/                        # dokumen rancangan dan rangkuman
 |---|---|
 | `users` | Petugas, dengan `role` dan `is_active` |
 | `pmo` | Pengawas Menelan Obat (nama, HP, hubungan) |
-| `pasien_program` | Pasien yang terdaftar di program (`no_rm` menghubungkan ke SIMRS) |
+| `pasien_program` | Pasien program, data mandiri hasil input petugas (no. RM, nama, tempat/tanggal lahir, jenis kelamin, no. HP, alamat) |
 | `resep` | Resep obat (dosis berupa teks) beserta fase dan rentang tanggal |
 | `jadwal` | Jadwal minum, kontrol, dan ambil obat. Unik per pasien, jenis, tanggal, jam |
 | `log_minum` | Konfirmasi minum. `client_uuid` unik untuk mencegah data ganda |
@@ -300,7 +255,7 @@ Tanggal dan jam dikirim sebagai teks lokal (`2026-10-25`, `07:00`), bukan UTC, a
 
 ## Pengujian manual
 
-Sebelum menambah fitur baru, pengujian dilakukan manual per bagian: fondasi, database, lapisan SIMRS, dashboard pasien, resep dan jadwal, widget pemantauan, dan kesiapan (data uji bersih dan cadangan database).
+Sebelum menambah fitur baru, pengujian dilakukan manual per bagian: fondasi, database, dashboard pasien, resep dan jadwal, widget pemantauan, dan kesiapan (data uji bersih dan cadangan database).
 
 Beberapa pemeriksaan yang berguna:
 
@@ -309,20 +264,14 @@ php artisan migrate:status
 php artisan optimize:clear
 ```
 
-```sql
--- Database SIMRS tiruan tidak boleh berisi tabel milik sistem
-USE simrs_dummy; SHOW TABLES;
-```
-
 Uji alarm di aplikasi Android harus memakai **HP fisik** dari beberapa merek (Xiaomi, Oppo, Vivo, Samsung), bukan hanya emulator.
 
 ## Keamanan dan privasi
 
 Status TBC termasuk data kesehatan yang dilindungi **UU No. 27 Tahun 2022 tentang Pelindungan Data Pribadi**.
 
-- **Jangan mengunggah** `.env`, data pasien nyata, hasil `mysqldump`, atau kredensial SIMRS ke repositori.
-- Database SIMRS tiruan hanya berisi data fiktif.
-- Akun database SIMRS produksi harus hanya punya izin `SELECT`.
+- **Jangan mengunggah** `.env`, data pasien nyata, atau hasil `mysqldump` ke repositori.
+- Sistem tidak terhubung ke SIMRS. Data identitas pasien hanya berasal dari input petugas, jadi kumpulkan seperlunya saja (prinsip minimisasi data).
 - Kode aktivasi disimpan sebagai hash (SHA-256), hanya ditampilkan sekali, berlaku 48 jam, dan sekali pakai.
 - Akses dashboard berbasis peran dan seluruh aksi penting tercatat di `audit_log`.
 - Notifikasi aplikasi dibuat netral ("Waktunya minum obat") tanpa kata TBC, untuk mengurangi stigma di layar kunci.
@@ -335,20 +284,19 @@ Bila menemukan celah keamanan, laporkan langsung ke tim melalui kontak di bawah,
 
 | Gejala | Kemungkinan penyebab dan solusi |
 |---|---|
-| `SQLSTATE ... Connection refused` pada koneksi `simrs` | Cek `SIMRS_DB_*`, lalu `php artisan optimize:clear`. Pastikan database SIMRS dapat dijangkau dari server |
 | Akun nonaktif masih bisa masuk dashboard | Pastikan model `User` `implements FilamentUser` dengan method `canAccessPanel` |
 | `User::create()` tidak menyimpan `role` atau `is_active` | Daftarkan kedua kolom di `$fillable` (atau atribut `#[Fillable]`) |
 | Hasil di `tinker` tidak berubah setelah mengedit kode | Tutup (`exit`) dan buka lagi tinker, karena kode tidak dimuat ulang |
 | Jadwal tidak berubah setelah jam minum diganti | Simpan perubahan, lalu tekan *Buat/perbarui jadwal*. Pasien tanpa resep tidak menghasilkan jadwal. Jadwal yang sudah punya log sengaja tidak diganti |
 | Dashboard tidak menampilkan data terbaru | Muat ulang halaman (Ctrl+Shift+R). Perubahan lewat tinker atau MySQL baru tampil setelah dimuat ulang |
 | Tanggal pada JSON mundur satu hari | Pastikan cast `date:Y-m-d` pada model `Jadwal` dan `Resep` |
-| Pencarian pasien tidak menemukan siapa pun | Cek `filter_tbc` dan awalan ICD di `config/simrs.php`, serta data di tabel `diagnosis` |
+| Pasien tidak muncul saat dicari | Pencarian memakai nama atau no. RM persis seperti yang diketik saat pendaftaran. Cek ejaan dan spasi |
 
 ## Roadmap
 
-- [x] Setup Laravel, Filament, Sanctum, dua koneksi database
+- [x] Setup Laravel, Filament, Sanctum
 - [x] Skema database dan model
-- [x] Lapisan SIMRS read-only
+- [x] Data pasien mandiri (tanpa SIMRS), input manual oleh petugas
 - [x] Dashboard pasien, PMO, kode aktivasi, audit log
 - [x] Resep, pembuat jadwal, widget pemantauan
 - [ ] Menuntaskan pengujian manual dan serah terima Fase 1
@@ -357,7 +305,6 @@ Bila menemukan celah keamanan, laporkan langsung ke tim melalui kontak di bawah,
 - [ ] Deteksi dosis terlewat dan notifikasi FCM
 - [ ] Jadwal kontrol dan pengingat ambil obat
 - [ ] Foto bukti minum (opsional, dikompres)
-- [ ] Integrasi SIMRS asli
 - [ ] Deploy produksi (HTTPS, cadangan), panduan petugas, dan dokumentasi serah terima
 
 ## Tim dan kontak

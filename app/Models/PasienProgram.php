@@ -14,13 +14,17 @@ class PasienProgram extends Authenticatable
     protected $table = 'pasien_program';
 
     protected $fillable = [
-        'no_rm', 'nama', 'no_hp', 'pmo_id', 'jam_minum_default',
+        'no_rm', 'nama', 'tempat_lahir', 'tgl_lahir', 'jenis_kelamin',
+        'no_hp', 'alamat', 'pmo_id', 'jam_minum_default',
         'status', 'foto_bukti_aktif', 'dibuat_oleh',
     ];
 
     protected function casts(): array
     {
-        return ['foto_bukti_aktif' => 'boolean'];
+        return [
+            'foto_bukti_aktif' => 'boolean',
+            'tgl_lahir' => 'date:Y-m-d',
+        ];
     }
 
     public function pmo(): BelongsTo

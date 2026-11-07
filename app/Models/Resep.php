@@ -11,7 +11,7 @@ class Resep extends Model
 
     protected $fillable = [
         'pasien_program_id', 'nama_obat', 'dosis_teks', 'fase', 'jam_minum',
-        'tgl_mulai', 'tgl_selesai', 'sumber', 'catatan',
+        'tgl_mulai', 'tgl_selesai', 'catatan',
     ];
 
     protected function casts(): array

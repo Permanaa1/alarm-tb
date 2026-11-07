@@ -44,19 +44,6 @@ return [
             'transaction_mode' => 'DEFERRED',
         ],
 
-        'simrs' => [
-            'driver' => env('SIMRS_DB_DRIVER', 'mysql'),
-            'host' => env('SIMRS_DB_HOST', '127.0.0.1'),
-            'port' => env('SIMRS_DB_PORT', '3306'),
-            'database' => env('SIMRS_DB_DATABASE'),
-            'username' => env('SIMRS_DB_USERNAME'),
-            'password' => env('SIMRS_DB_PASSWORD'),
-            'charset' => 'utf8mb4',
-            'collation' => 'utf8mb4_unicode_ci',
-            'prefix' => '',
-            'strict' => true,
-        ],
-
         'mysql' => [
             'driver' => 'mysql',
             'url' => env('DB_URL'),

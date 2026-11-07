@@ -18,8 +18,34 @@ class PasienProgramInfolist
         return $schema->components([
             Section::make('Identitas')
                 ->schema([
-                    TextEntry::make('no_rm')->label('No. RM'),
+                    TextEntry::make('no_rm')->label('No. RM')->copyable(),
                     TextEntry::make('nama')->label('Nama'),
+                    TextEntry::make('ttl')
+                        ->label('Tempat, tanggal lahir')
+                        ->state(function ($record) {
+                            $tempat = trim((string) $record->tempat_lahir);
+                            $tgl = $record->tgl_lahir?->format('d M Y');
+
+                            return match (true) {
+                                $tempat !== '' && $tgl !== null => "{$tempat}, {$tgl}",
+                                $tgl !== null => $tgl,
+                                $tempat !== '' => $tempat,
+                                default => null,
+                            };
+                        })
+                        ->placeholder('-'),
+                    TextEntry::make('umur')
+                        ->label('Umur')
+                        ->state(fn ($record) => $record->tgl_lahir ? $record->tgl_lahir->age . ' tahun' : null)
+                        ->placeholder('-'),
+                    TextEntry::make('jenis_kelamin')
+                        ->label('Jenis kelamin')
+                        ->formatStateUsing(fn ($state) => match ($state) {
+                            'L' => 'Laki-laki',
+                            'P' => 'Perempuan',
+                            default => '-',
+                        })
+                        ->placeholder('-'),
                     TextEntry::make('status')
                         ->badge()
                         ->color(fn (string $state): string => match ($state) {
@@ -29,6 +55,7 @@ class PasienProgramInfolist
                             default => 'warning',
                         }),
                     TextEntry::make('no_hp')->label('HP pasien')->placeholder('-')->copyable(),
+                    TextEntry::make('alamat')->label('Alamat')->placeholder('-')->columnSpan(2),
                     TextEntry::make('pmo.nama')->label('PMO (pendamping)')->placeholder('Belum ada'),
                     TextEntry::make('pmo.no_hp')->label('HP PMO')->placeholder('-')->copyable(),
                 ])

@@ -2,11 +2,11 @@
 
 namespace App\Filament\Resources\PasienPrograms\Schemas;
 
-use App\Services\Simrs\SimrsRepository;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Section;
-use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 
 class PasienProgramForm
@@ -14,50 +14,52 @@ class PasienProgramForm
     public static function configure(Schema $schema): Schema
     {
         return $schema->components([
-            Section::make('Data pasien (dari SIMRS)')
-                ->description('Cari pasien dari SIMRS. Nama dan nomor HP terisi otomatis.')
+            Section::make('Data pasien')
+                ->description('Isi manual dari berkas pasien. Data ini berdiri sendiri dan tidak terhubung ke SIMRS.')
                 ->schema([
-                    Select::make('no_rm')
-                        ->label('Cari pasien (no. RM atau nama)')
-                        ->searchable()
+                    TextInput::make('no_rm')
+                        ->label('No. RM')
                         ->required()
-                        ->live()
-                        ->getSearchResultsUsing(function (string $search): array {
-                            if (mb_strlen(trim($search)) < 2) {
-                                return [];
-                            }
-
-                            return app(SimrsRepository::class)
-                                ->cariPasien($search)
-                                ->mapWithKeys(fn ($p) => [$p->no_rm => "{$p->no_rm} — {$p->nama}"])
-                                ->all();
-                        })
-                        ->getOptionLabelUsing(function ($value): ?string {
-                            $p = app(SimrsRepository::class)->cariByNoRm((string) $value);
-
-                            return $p ? "{$p->no_rm} — {$p->nama}" : (string) $value;
-                        })
-                        ->afterStateUpdated(function ($state, Set $set) {
-                            $p = $state ? app(SimrsRepository::class)->cariByNoRm((string) $state) : null;
-                            $set('nama', $p->nama ?? null);
-                            $set('no_hp', $p->no_hp ?? null);
-                        })
+                        ->maxLength(30)
+                        ->dehydrateStateUsing(fn ($state) => trim((string) $state))
                         ->unique(ignoreRecord: true)
                         ->validationMessages([
                             'unique' => 'Pasien dengan no. RM ini sudah terdaftar di program.',
-                        ])
-                        ->disabledOn('edit')
-                        ->columnSpanFull(),
+                        ]),
 
                     TextInput::make('nama')
-                        ->label('Nama')
-                        ->readOnly()
-                        ->required(),
+                        ->label('Nama lengkap')
+                        ->required()
+                        ->maxLength(255)
+                        ->dehydrateStateUsing(fn ($state) => trim((string) $state)),
+
+                    TextInput::make('tempat_lahir')
+                        ->label('Tempat lahir')
+                        ->maxLength(100),
+
+                    DatePicker::make('tgl_lahir')
+                        ->label('Tanggal lahir')
+                        ->required()
+                        ->maxDate(now())
+                        ->native(false)
+                        ->displayFormat('d M Y'),
+
+                    Select::make('jenis_kelamin')
+                        ->label('Jenis kelamin')
+                        ->options([
+                            'L' => 'Laki-laki',
+                            'P' => 'Perempuan',
+                        ]),
 
                     TextInput::make('no_hp')
-                        ->label('No. HP')
+                        ->label('No. HP pasien')
                         ->tel()
-                        ->helperText('Terisi dari SIMRS. Boleh diperbarui kalau nomornya berubah.'),
+                        ->maxLength(20),
+
+                    Textarea::make('alamat')
+                        ->label('Alamat')
+                        ->rows(2)
+                        ->columnSpanFull(),
                 ])
                 ->columns(2),
 

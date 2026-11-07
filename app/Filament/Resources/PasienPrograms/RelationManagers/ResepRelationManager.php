@@ -2,9 +2,6 @@
 
 namespace App\Filament\Resources\PasienPrograms\RelationManagers;
 
-use App\Services\AuditLogger;
-use App\Services\Simrs\SimrsRepository;
-use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
@@ -14,12 +11,10 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\TimePicker;
-use Filament\Notifications\Notification;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
-use Illuminate\Support\HtmlString;
 
 class ResepRelationManager extends RelationManager
 {
@@ -95,27 +90,6 @@ class ResepRelationManager extends RelationManager
                 TextColumn::make('tgl_selesai')->label('Selesai')->date('d M Y')->placeholder('Belum diisi'),
             ])
             ->headerActions([
-                Action::make('lihatSimrs')
-                    ->label('Lihat resep di SIMRS')
-                    ->icon('heroicon-o-eye')
-                    ->color('gray')
-                    ->action(function () {
-                        $pasien = $this->getOwnerRecord();
-                        $rows = app(SimrsRepository::class)->resepPasien($pasien->no_rm);
-
-                        AuditLogger::catat('lihat_resep_simrs', $pasien);
-
-                        $teks = $rows->isEmpty()
-                            ? 'Tidak ada resep ditemukan di SIMRS.'
-                            : $rows->map(fn ($r) => e("{$r->tanggal}: {$r->nama_obat} — {$r->dosis}"))->implode('<br>');
-
-                        Notification::make()
-                            ->title('Resep di SIMRS')
-                            ->body(new HtmlString($teks))
-                            ->info()
-                            ->persistent()
-                            ->send();
-                    }),
                 CreateAction::make(),
             ])
             ->recordActions([

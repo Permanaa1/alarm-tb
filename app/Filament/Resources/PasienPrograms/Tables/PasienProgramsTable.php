@@ -35,7 +35,7 @@ class PasienProgramsTable
             ->columns([
                 TextColumn::make('nama')
                     ->label('Pasien')
-                    ->searchable()
+                    ->searchable(['nama', 'no_rm'])
                     ->sortable()
                     ->description(fn ($record) => 'RM ' . $record->no_rm),
                 TextColumn::make('status')
@@ -126,6 +126,6 @@ class PasienProgramsTable
             ->striped()
             ->defaultSort('created_at', 'desc')
             ->emptyStateHeading('Belum ada pasien terdaftar')
-            ->emptyStateDescription('Klik "Daftarkan pasien" untuk menambahkan pasien dari SIMRS.');
+            ->emptyStateDescription('Klik "Daftarkan pasien" lalu isi data pasien secara manual.');
     }
 }
